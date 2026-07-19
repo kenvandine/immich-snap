@@ -1,0 +1,9 @@
+#!/bin/sh
+set -e
+. "$SNAP/bin/load-env"
+# depends_on: postgres, redis — after: only orders startup; wait for readiness
+until "$SNAP/usr/lib/postgresql/18/bin/pg_isready" -h "$SNAP_COMMON/run" -q; do sleep 1; done
+until "$SNAP/usr/bin/valkey-cli" -s "$REDIS_SOCKET" ping >/dev/null 2>&1; do sleep 1; done
+cd /usr/src/app   # layout -> $SNAP/immich/app, same path as the container
+export PATH="/usr/src/app/server/bin:$PATH"
+exec ./start.sh

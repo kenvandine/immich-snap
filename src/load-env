@@ -1,0 +1,33 @@
+# Shared environment for all immich snap services.
+# Replaces the docker-compose x-environment anchor. Sourced, not executed.
+
+ARCH_TRIPLET="x86_64-linux-gnu"
+export LD_LIBRARY_PATH="$SNAP/usr/local/lib:$SNAP/usr/lib/$ARCH_TRIPLET:$SNAP/usr/lib:$SNAP/lib/$ARCH_TRIPLET${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+export PATH="$SNAP/usr/local/bin:$SNAP/bin:$SNAP/usr/bin:$SNAP/usr/lib/postgresql/18/bin:$PATH"
+export HOME="$SNAP_COMMON/home"
+
+export NODE_ENV=production
+
+# Database: postgres listens on a unix socket only (no TCP port to collide with)
+export DB_HOSTNAME="$SNAP_COMMON/run"
+export DB_USERNAME=immich
+export DB_DATABASE_NAME=immich
+export DB_PASSWORD="$(cat "$SNAP_DATA/secrets/db_password" 2>/dev/null || true)"
+export DB_VECTOR_EXTENSION=pgvector
+
+# Valkey/redis: socket only
+export REDIS_SOCKET="$SNAP_COMMON/run/redis.sock"
+
+export IMMICH_MACHINE_LEARNING_URL="http://127.0.0.1:3003"
+export IMMICH_MEDIA_LOCATION="$SNAP_COMMON/upload"
+export IMMICH_BUILD_DATA="$SNAP/immich/build"
+export MACHINE_LEARNING_CACHE_FOLDER="$SNAP_COMMON/model-cache"
+export HF_HOME="$SNAP_COMMON/model-cache/hf"
+
+export IMMICH_PORT="$(snapctl get ports.http 2>/dev/null)"
+[ -n "$IMMICH_PORT" ] || export IMMICH_PORT=2283
+export IMMICH_HOST=0.0.0.0
+
+export LOG_LEVEL="$(snapctl get log-level 2>/dev/null)"
+[ -n "$LOG_LEVEL" ] || export LOG_LEVEL=log
+export IMMICH_LOG_LEVEL="$LOG_LEVEL"

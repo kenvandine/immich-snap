@@ -1,0 +1,11 @@
+#!/bin/sh
+set -e
+. "$SNAP/bin/load-env"
+exec setpriv --clear-groups --reuid snap_daemon --regid snap_daemon -- \
+  "$SNAP/usr/bin/valkey-server" \
+  --port 0 \
+  --unixsocket "$SNAP_COMMON/run/redis.sock" \
+  --unixsocketperm 770 \
+  --dir "$SNAP_COMMON/redis" \
+  --daemonize no \
+  --save 3600 1 300 100 60 10000

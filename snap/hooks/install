@@ -1,0 +1,42 @@
+#!/bin/sh
+set -e
+export LD_LIBRARY_PATH="$SNAP/usr/lib/x86_64-linux-gnu:$SNAP/usr/lib"
+PGBIN="$SNAP/usr/lib/postgresql/18/bin"
+DATA="$SNAP_COMMON/postgres/data"
+RUN="$SNAP_COMMON/run"
+
+mkdir -p "$RUN" "$SNAP_COMMON/upload" "$SNAP_COMMON/model-cache" \
+         "$SNAP_COMMON/redis" "$SNAP_COMMON/postgres" "$SNAP_COMMON/home" \
+         "$SNAP_DATA/secrets"
+chmod 700 "$SNAP_DATA/secrets"
+
+# Secrets: compose hardcoded DB_PASSWORD and injected ${APP_SEED}; generate instead
+for s in db_password jwt_secret; do
+  if [ ! -f "$SNAP_DATA/secrets/$s" ]; then
+    head -c 24 /dev/urandom | od -An -tx1 | tr -d ' \n' > "$SNAP_DATA/secrets/$s"
+    chmod 600 "$SNAP_DATA/secrets/$s"
+  fi
+done
+
+# postgres and valkey run as snap_daemon (postgres refuses root)
+chown -R snap_daemon:snap_daemon "$SNAP_COMMON/postgres" "$SNAP_COMMON/redis" "$RUN"
+
+run_as_pg() {
+  setpriv --clear-groups --reuid snap_daemon --regid snap_daemon -- "$@"
+}
+
+if [ ! -f "$DATA/PG_VERSION" ]; then
+  run_as_pg "$PGBIN/initdb" -D "$DATA" --encoding=UTF8 --locale=C.UTF-8 --auth-local=peer
+  # snap_daemon (hooks/CLI) authenticates via peer; the immich role via password
+  cat > "$DATA/pg_hba.conf" <<HBA
+local all snap_daemon peer
+local all all scram-sha-256
+HBA
+  run_as_pg "$PGBIN/pg_ctl" -D "$DATA" -w \
+    -o "-c listen_addresses='' -c unix_socket_directories=$RUN" start
+  PW="$(cat "$SNAP_DATA/secrets/db_password")"
+  run_as_pg "$PGBIN/psql" -h "$RUN" -d postgres -v ON_ERROR_STOP=1 \
+    -c "CREATE ROLE immich LOGIN SUPERUSER PASSWORD '$PW';" \
+    -c "CREATE DATABASE immich OWNER immich;"
+  run_as_pg "$PGBIN/pg_ctl" -D "$DATA" -w stop
+fi

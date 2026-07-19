@@ -1,0 +1,10 @@
+#!/bin/sh
+set -e
+. "$SNAP/bin/load-env"
+PGBIN="$SNAP/usr/lib/postgresql/18/bin"
+DATA="$SNAP_COMMON/postgres/data"
+[ -f "$DATA/PG_VERSION" ] || { echo "postgres: no cluster at $DATA (install hook failed?)"; exit 1; }
+exec setpriv --clear-groups --reuid snap_daemon --regid snap_daemon -- \
+  "$PGBIN/postgres" -D "$DATA" \
+  -c listen_addresses='' \
+  -c unix_socket_directories="$SNAP_COMMON/run"

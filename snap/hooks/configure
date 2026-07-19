@@ -1,0 +1,41 @@
+#!/bin/sh
+set -e
+
+port="$(snapctl get ports.http)"
+if [ -z "$port" ]; then
+  port=2283
+  snapctl set ports.http="$port"
+fi
+case "$port" in
+  ''|*[!0-9]*) echo "ports.http must be a number, got '$port'" >&2; exit 1 ;;
+esac
+if [ "$port" -lt 1 ] || [ "$port" -gt 65535 ]; then
+  echo "ports.http out of range: $port" >&2; exit 1
+fi
+
+ll="$(snapctl get log-level)"
+if [ -z "$ll" ]; then
+  ll=log
+  snapctl set log-level="$ll"
+fi
+case "$ll" in
+  verbose|debug|log|warn|error) ;;
+  *) echo "log-level must be one of verbose|debug|log|warn|error" >&2; exit 1 ;;
+esac
+
+mle="$(snapctl get machine-learning.enabled)"
+if [ -z "$mle" ]; then
+  mle=true
+  snapctl set machine-learning.enabled="$mle"
+fi
+case "$mle" in
+  true)  snapctl start --enable immich.machine-learning 2>/dev/null || true ;;
+  false) snapctl stop --disable immich.machine-learning 2>/dev/null || true ;;
+  *) echo "machine-learning.enabled must be true or false" >&2; exit 1 ;;
+esac
+
+# Wrappers read options at startup; restart to apply
+snapctl restart immich.server 2>/dev/null || true
+if [ "$mle" = "true" ]; then
+  snapctl restart immich.machine-learning 2>/dev/null || true
+fi

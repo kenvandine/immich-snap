@@ -1,0 +1,17 @@
+#!/bin/sh
+set -e
+. "$SNAP/bin/load-env"
+export VIRTUAL_ENV=/opt/venv
+export PATH="/opt/venv/bin:$PATH"
+export IMMICH_HOST=127.0.0.1
+export IMMICH_PORT=3003
+# App code location varies by image generation; try known launchers in order.
+if [ -x "$SNAP/immich/ml/start.sh" ]; then
+  cd "$SNAP/immich/ml"
+  exec ./start.sh
+elif /opt/venv/bin/python -c 'import immich_ml' 2>/dev/null; then
+  exec /opt/venv/bin/python -m immich_ml
+else
+  echo "machine-learning: no launcher found (checked start.sh and immich_ml module)" >&2
+  exit 1
+fi

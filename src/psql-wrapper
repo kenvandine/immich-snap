@@ -1,0 +1,9 @@
+#!/bin/sh
+set -e
+. "$SNAP/bin/load-env"
+if [ "$(id -u)" != "0" ]; then
+  echo "Run as root: sudo immich.psql" >&2
+  exit 1
+fi
+exec setpriv --clear-groups --reuid snap_daemon --regid snap_daemon -- \
+  "$SNAP/usr/lib/postgresql/18/bin/psql" -h "$SNAP_COMMON/run" -U snap_daemon -d immich "$@"

@@ -1,0 +1,158 @@
+name: immich
+title: Immich
+summary: Self-hosted photo and video management
+description: |
+  High-performance self-hosted photo and video management solution.
+  Easily back up, organize, and manage your photos on your own server.
+
+  This snap bundles the complete Immich stack in a single package:
+  the web/API server, the machine-learning service (smart search and
+  facial recognition), PostgreSQL with pgvector, and Valkey.
+
+  After installation Immich is available at http://localhost:2283.
+
+  Configuration:
+    sudo snap set immich ports.http=2283
+    sudo snap set immich log-level=log            # verbose|debug|log|warn|error
+    sudo snap set immich machine-learning.enabled=true
+
+  Photos and all data are stored under /var/snap/immich/common.
+license: AGPL-3.0-only
+source-code: https://github.com/immich-app/immich
+website: https://immich.app
+issues: https://github.com/kenvandine/immich-snap/issues
+
+adopt-info: server-image
+base: core26
+confinement: strict
+grade: stable
+
+platforms:
+  amd64:
+
+system-usernames:
+  snap_daemon: shared
+
+layout:
+  /usr/local:
+    symlink: $SNAP/usr/local
+  /opt/venv:
+    symlink: $SNAP/opt/venv
+  /usr/src/app:
+    symlink: $SNAP/immich/app
+
+apps:
+  postgres:
+    command: bin/postgres-wrapper
+    daemon: simple
+    restart-condition: on-failure
+    stop-timeout: 60s
+    plugs: [network]
+  redis:
+    command: bin/redis-wrapper
+    daemon: simple
+    restart-condition: on-failure
+    plugs: [network]
+  machine-learning:
+    command: bin/ml-wrapper
+    daemon: simple
+    restart-condition: on-failure
+    plugs: [network, network-bind]
+  server:
+    command: bin/server-wrapper
+    daemon: simple
+    restart-condition: on-failure
+    after: [postgres, redis]
+    plugs: [network, network-bind]
+  psql:
+    command: bin/psql-wrapper
+    plugs: [network]
+
+parts:
+  server-image:
+    plugin: nil
+    build-packages: [skopeo, umoci, ca-certificates]
+    override-pull: |
+      if [ ! -d img ]; then
+        skopeo copy docker://ghcr.io/immich-app/immich-server@sha256:c716dc20f957aafd89fa9d284a2ec63e25c9e2d8d8e87c6197d540a3dce237db oci:img:server
+      fi
+      if [ ! -d bundle/rootfs ]; then
+        umoci unpack --image img:server bundle
+      fi
+    override-build: |
+      R="$CRAFT_PART_SRC/bundle/rootfs"
+      echo "=== rootfs top ==="; ls "$R"
+      echo "=== /usr/src/app ==="; ls "$R/usr/src/app" || true
+      echo "=== start.sh candidates ==="
+      find "$R/usr/src/app" -maxdepth 2 -name 'start*.sh' -exec sh -c 'echo "--- $1"; cat "$1"' _ {} \; || true
+      echo "=== /build ==="; ls "$R/build" || true
+      echo "=== /usr/local/bin ==="; ls "$R/usr/local/bin" || true
+      echo "=== /usr/local/lib (top 60) ==="; ls "$R/usr/local/lib" | head -60 || true
+      echo "=== ffmpeg in image ==="
+      find "$R/usr" -maxdepth 4 \( -iname 'ffmpeg*' -o -iname 'ffprobe*' \) 2>/dev/null | head || true
+      mkdir -p "$CRAFT_PART_INSTALL/immich/app" "$CRAFT_PART_INSTALL/immich/build" "$CRAFT_PART_INSTALL/usr/local"
+      cp -a "$R/usr/src/app/." "$CRAFT_PART_INSTALL/immich/app/"
+      cp -a "$R/build/." "$CRAFT_PART_INSTALL/immich/build/"
+      cp -a "$R/usr/local/." "$CRAFT_PART_INSTALL/usr/local/"
+      craftctl set version="3.0.3"
+
+  ml-image:
+    plugin: nil
+    build-packages: [skopeo, umoci, ca-certificates]
+    override-pull: |
+      if [ ! -d img ]; then
+        skopeo copy docker://ghcr.io/immich-app/immich-machine-learning@sha256:d76fe88b69282c09a97eac4f82dafa82cfd77bce274bc742591cde974f87dacb oci:img:ml
+      fi
+      if [ ! -d bundle/rootfs ]; then
+        umoci unpack --image img:ml bundle
+      fi
+    override-build: |
+      R="$CRAFT_PART_SRC/bundle/rootfs"
+      echo "=== rootfs top ==="; ls "$R"
+      echo "=== /usr/src/app ==="; ls "$R/usr/src/app" || true
+      echo "=== start.sh candidates ==="
+      find "$R/usr/src/app" -maxdepth 2 -name 'start*.sh' -exec sh -c 'echo "--- $1"; cat "$1"' _ {} \; || true
+      echo "=== /opt ==="; ls "$R/opt" 2>/dev/null || true
+      echo "=== venv cfg ==="; cat "$R"/opt/venv/pyvenv.cfg 2>/dev/null || true
+      echo "=== /usr/local/bin ==="; ls "$R/usr/local/bin" || true
+      mkdir -p "$CRAFT_PART_INSTALL/immich/ml" "$CRAFT_PART_INSTALL/usr/local"
+      # App code location varies by image generation: /usr/src/app in older
+      # images; newer uv-based images install immich_ml into the venv itself.
+      for d in usr/src/app app; do
+        if [ -d "$R/$d" ]; then
+          cp -a "$R/$d/." "$CRAFT_PART_INSTALL/immich/ml/"
+          break
+        fi
+      done
+      if [ -d "$R/opt" ]; then
+        mkdir -p "$CRAFT_PART_INSTALL/opt"
+        cp -a "$R/opt/." "$CRAFT_PART_INSTALL/opt/"
+      fi
+      cp -an "$R/usr/local/." "$CRAFT_PART_INSTALL/usr/local/" || true
+
+  postgres:
+    plugin: nil
+    stage-packages:
+      - postgresql-18
+      - postgresql-client-18
+      - postgresql-18-pgvector
+
+  redis:
+    plugin: nil
+    stage-packages:
+      - valkey-server
+      - valkey-tools
+
+  runtime-deps:
+    plugin: nil
+    stage-packages:
+      - ffmpeg
+      - perl
+      - libvips42t64
+      - libgomp1
+
+  scripts:
+    plugin: dump
+    source: src
+    organize:
+      '*': bin/

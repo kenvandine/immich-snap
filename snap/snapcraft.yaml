@@ -74,7 +74,7 @@ parts:
     build-packages: [skopeo, umoci, ca-certificates]
     override-pull: |
       if [ ! -d img ]; then
-        skopeo copy docker://ghcr.io/immich-app/immich-server@sha256:c716dc20f957aafd89fa9d284a2ec63e25c9e2d8d8e87c6197d540a3dce237db oci:img:server
+        skopeo copy docker://ghcr.io/immich-app/immich-server@sha256:2ab6a6273755d9b8a5c4f25dbaa2d097fc4a2cc261b70bc73621e6405cc106fe oci:img:server
       fi
       if [ ! -d bundle/rootfs ]; then
         umoci unpack --image img:server bundle
@@ -94,14 +94,14 @@ parts:
       cp -a "$R/usr/src/app/." "$CRAFT_PART_INSTALL/immich/app/"
       cp -a "$R/build/." "$CRAFT_PART_INSTALL/immich/build/"
       cp -a "$R/usr/local/." "$CRAFT_PART_INSTALL/usr/local/"
-      craftctl set version="3.0.3"
+      craftctl set version="3.2.1"
 
   ml-image:
     plugin: nil
     build-packages: [skopeo, umoci, ca-certificates]
     override-pull: |
       if [ ! -d img ]; then
-        skopeo copy docker://ghcr.io/immich-app/immich-machine-learning@sha256:d76fe88b69282c09a97eac4f82dafa82cfd77bce274bc742591cde974f87dacb oci:img:ml
+        skopeo copy docker://ghcr.io/immich-app/immich-machine-learning@sha256:4f879e40da4910a174ce83c94f717e672dd5f0cb0b8cc2e6b0f47500d788b47e oci:img:ml
       fi
       if [ ! -d bundle/rootfs ]; then
         umoci unpack --image img:ml bundle
@@ -133,23 +133,23 @@ parts:
   postgres:
     plugin: nil
     stage-packages:
-      - postgresql-18
-      - postgresql-client-18
-      - postgresql-18-pgvector
+    - postgresql-18
+    - postgresql-client-18
+    - postgresql-18-pgvector
 
   redis:
     plugin: nil
     stage-packages:
-      - valkey-server
-      - valkey-tools
+    - valkey-server
+    - valkey-tools
 
   runtime-deps:
     plugin: nil
     stage-packages:
-      - ffmpeg
-      - perl
-      - libvips42t64
-      - libgomp1
+    - ffmpeg
+    - perl
+    - libvips42t64
+    - libgomp1
 
   scripts:
     plugin: dump
